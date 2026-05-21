@@ -83,3 +83,6 @@ typings/
 /build/
 /deploy-config.json
 /local
+/web/
+.idea/
+ios/DerivedData*/

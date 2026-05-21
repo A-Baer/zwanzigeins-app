@@ -10,7 +10,7 @@ export default class SeeAndSpeakGame extends NumberGame {
 
 		super('see-and-speak', 'see-and-speak-menu', 'see-and-speak-game');
 
-		if (typeof SpeechRecognition === 'undefined' && typeof webkitSpeechRecognition === 'undefined') {
+		if (!this.getNativeSpeechRecognition() && !this.getSpeechRecognitionConstructor()) {
 			// the variable is defined
 
 			let optionsArea = this.menuElem.querySelector('.options');
@@ -47,16 +47,18 @@ export default class SeeAndSpeakGame extends NumberGame {
 
 			if (this.recognitionRunning) {
 				
-				this.recognition.stop();
+				this.stopRecognition();
 				this.recognitionAutoStartEnabled = false;
 			}
 			else {
-				this.recognition.start();
+				this.startRecognition();
 				this.recognitionAutoStartEnabled = true;
 			}
 		});
 
 		this.recognitionRunning = false;
+		this.recognitionRightResultGiven = true;
+		this.nativeRecognitionStartId = 0;
 		
 		this.debugModeEnabled = false;
 		
@@ -64,9 +66,7 @@ export default class SeeAndSpeakGame extends NumberGame {
 			
 			if(oldPageId == 'see-and-speak-game') {
 				
-				if(this.recognition) {
-					this.recognition.stop();
-				}				
+				this.stopRecognition();
 			}
 		});
 		
@@ -97,76 +97,226 @@ export default class SeeAndSpeakGame extends NumberGame {
 		}		
 	}
 
+	getSpeechRecognitionConstructor() {
+
+		return window.SpeechRecognition || window.webkitSpeechRecognition;
+	}
+
+	getNativeSpeechRecognition() {
+
+		let capacitor = window.Capacitor;
+
+		if (!capacitor || !capacitor.isNativePlatform || !capacitor.isNativePlatform()) {
+			return null;
+		}
+
+		if (!capacitor.isPluginAvailable || !capacitor.isPluginAvailable('SpeechRecognition')) {
+			return null;
+		}
+
+		if (!capacitor.nativePromise) {
+			return null;
+		}
+
+		return {
+			available: () => capacitor.nativePromise('SpeechRecognition', 'available', {}),
+			checkPermissions: () => capacitor.nativePromise('SpeechRecognition', 'checkPermissions', {}),
+			requestPermissions: () => capacitor.nativePromise('SpeechRecognition', 'requestPermissions', {}),
+			start: options => capacitor.nativePromise('SpeechRecognition', 'start', options),
+			stop: () => capacitor.nativePromise('SpeechRecognition', 'stop', {})
+		};
+	}
+
+	async startRecognition() {
+
+		if (this.recognitionRunning) {
+			return;
+		}
+
+		let nativeSpeechRecognition = this.getNativeSpeechRecognition();
+
+		if (nativeSpeechRecognition) {
+			await this.startNativeRecognition(nativeSpeechRecognition);
+			return;
+		}
+
+		if (!this.recognition) {
+			return;
+		}
+
+		try {
+			this.recognition.start();
+		}
+		catch (error) {
+			this.showRecognitionMessage('Spracheingabe konnte nicht gestartet werden: ' + error.message);
+		}
+	}
+
+	async startNativeRecognition(nativeSpeechRecognition) {
+
+		let startId = ++this.nativeRecognitionStartId;
+
+		this.recognitionRunning = true;
+		this.microphoneButton.classList.add('active');
+		this.showRecognitionMessage('Aufnahme läuft...');
+
+		try {
+			let available = await nativeSpeechRecognition.available();
+
+			if (!available.available) {
+				this.showRecognitionMessage('Native Spracheingabe ist auf diesem Gerät nicht verfügbar.');
+				return;
+			}
+
+			let permissions = await nativeSpeechRecognition.checkPermissions();
+
+			if (permissions.speechRecognition !== 'granted') {
+				permissions = await nativeSpeechRecognition.requestPermissions();
+			}
+
+			if (permissions.speechRecognition !== 'granted') {
+				this.showRecognitionMessage('Spracheingabe ist nicht freigegeben: ' + permissions.speechRecognition);
+				return;
+			}
+
+			let result = await nativeSpeechRecognition.start({
+				language: 'de-DE',
+				maxResults: 5,
+				partialResults: false,
+				popup: false
+			});
+
+			if (startId !== this.nativeRecognitionStartId) {
+				return;
+			}
+
+			let matches = result.matches || [];
+
+			if (matches.length == 0) {
+				this.showRecognitionMessage('Keine Spracheingabe erkannt.');
+				return;
+			}
+
+			this.processRecognizedTranscripts(matches);
+		}
+		catch (error) {
+			let message = error && error.message ? error.message : String(error);
+			this.showRecognitionMessage('Native Spracheingabe-Fehler: ' + message);
+		}
+		finally {
+			if (startId === this.nativeRecognitionStartId) {
+				this.recognitionRunning = false;
+				this.microphoneButton.classList.remove('active');
+			}
+		}
+	}
+
+	stopRecognition() {
+
+		if (!this.recognition) {
+			let nativeSpeechRecognition = this.getNativeSpeechRecognition();
+			if (nativeSpeechRecognition) {
+				this.nativeRecognitionStartId++;
+				nativeSpeechRecognition.stop().catch(() => {});
+				this.recognitionRunning = false;
+				this.microphoneButton.classList.remove('active');
+			}
+			return;
+		}
+
+		try {
+			this.recognition.stop();
+		}
+		catch (error) {
+			// Some WebKit versions throw if recognition already ended.
+		}
+	}
+
+	showRecognitionMessage(message) {
+
+		if (this.debugOutputElem) {
+			this.debugOutputElem.textContent = message;
+		}
+		console.log(message);
+	}
+
+	processRecognizedTranscripts(transcripts) {
+
+		let result;
+
+		if (this.debugModeEnabled) {
+
+			let debugOutputHtml =
+				'<p>Aufgabe: ' +
+					this.rightResult +
+				'</p>' +
+				'<p>Spracheingabe:</p>'
+				;
+
+			debugOutputHtml += transcripts.join('<br>');
+			this.debugOutputElem.innerHTML = debugOutputHtml;
+		}
+
+		if (this.options.twistedSpeechMode == 'zehneins') {
+
+			let currentArity = this.options.arity;
+			let speechRecognitionEvent = {
+				results: [
+					transcripts.map(transcript => ({ transcript }))
+				]
+			};
+			result = this.twistedSpeechModeConverter.convertTwistedSpeechRecognition(currentArity, speechRecognitionEvent);
+		}
+		else {
+			result = transcripts[0];
+		}
+
+		if (result == this.rightResult) {
+
+			this.recognitionRightResultGiven = true;
+			this.stopRecognition();
+			this.taskElem.classList.remove("error");
+			super.processCorrectAnswer();
+		}
+		else {
+
+			this.numErrors++;
+			this.currentTaskNumErrors++;
+			this.recognitionRightResultGiven = false;
+			this.taskElem.classList.add("error");
+		}
+	}
+
 	initSpeechRecognitionIfNeeded() {
+
+		if (this.getNativeSpeechRecognition()) {
+			return;
+		}
 
 		if (!this.recognition) {
 
-			var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
+			let SpeechRecognition = this.getSpeechRecognitionConstructor();
 
-			var recognition = new SpeechRecognition();
+			let recognition = new SpeechRecognition();
 			recognition.continuous = false;
 			recognition.lang = 'de-DE';
 			recognition.interimResults = false;
 			recognition.maxAlternatives = 10;
 
-			let rightResultGiven = true;
-
 			let timeout = 0;
 
 			recognition.onresult = event => {
 
-				let result;
-				
-				if(this.debugModeEnabled) {
-				
-					let speechRecognitionResultList = event.results[0];
-					
-					let transcripts = [];
-					
-					for (let speechRecognitionAlternative of speechRecognitionResultList) {
-						transcripts.push(speechRecognitionAlternative.transcript);
-					}
-					
-					console.log(transcripts);
-					
-					let debugOutputHtml = 
-						'<p>Aufgabe: ' + 
-							this.rightResult + 
-						'</p>' +
-						'<p>Spracheingabe:</p>'
-						;
-					
-					debugOutputHtml += transcripts.join('<br>');
-					this.debugOutputElem.innerHTML = debugOutputHtml;
+				let speechRecognitionResultList = event.results[0];
+				let transcripts = [];
+
+				for (let speechRecognitionAlternative of speechRecognitionResultList) {
+					transcripts.push(speechRecognitionAlternative.transcript);
 				}
 
-				if (this.options.twistedSpeechMode == 'zehneins') {
-					
-					let currentArity = this.options.arity;
-					result = this.twistedSpeechModeConverter.convertTwistedSpeechRecognition(currentArity, event);
-				}
-				else {
-
-					var speechRecognitionInput = event.results[0][0].transcript;
-					console.log('speech-recognition-input: ' + speechRecognitionInput);
-					result = speechRecognitionInput;
-				}
-
-				if (result == this.rightResult) {
-
-					rightResultGiven = true;
-					recognition.stop();
-					clearTimeout(timeout);
-					this.taskElem.classList.remove("error");
-					super.processCorrectAnswer();
-				}
-				else {
-
-					this.numErrors++;
-					this.currentTaskNumErrors++;
-					rightResultGiven = false;
-					this.taskElem.classList.add("error");
-				}
+				console.log(transcripts);
+				clearTimeout(timeout);
+				this.processRecognizedTranscripts(transcripts);
 			};
 
 			recognition.onstart = () => {
@@ -180,10 +330,10 @@ export default class SeeAndSpeakGame extends NumberGame {
 				this.recognitionRunning = false;
 				this.microphoneButton.classList.remove('active');
 
-				if (!rightResultGiven && this.recognitionAutoStartEnabled) {
+				if (!this.recognitionRightResultGiven && this.recognitionAutoStartEnabled) {
 					
 					if(Pages.INSTANCE.getCurrentId() == 'see-and-speak-game') {
-						recognition.start();
+						this.startRecognition();
 					}
 				}
 			}
@@ -194,7 +344,11 @@ export default class SeeAndSpeakGame extends NumberGame {
 
 			recognition.onerror = event => {
 
-				console.log(event);
+				let message = 'Spracheingabe-Fehler: ' + event.error;
+				if (event.message) {
+					message += ' (' + event.message + ')';
+				}
+				this.showRecognitionMessage(message);
 			}
 
 			this.recognition = recognition;
@@ -222,7 +376,7 @@ export default class SeeAndSpeakGame extends NumberGame {
 	finishGame() {
 
 		super.finishGame();
-		this.recognition.stop();
+		this.stopRecognition();
 	}
 
 	generateNewTask() {
@@ -251,9 +405,8 @@ export default class SeeAndSpeakGame extends NumberGame {
 			rightResult: random
 		};
 		
-		if(!this.recognitionRunning) {
-			this.recognition.start();
-		}
+		this.recognitionRightResultGiven = false;
+		this.startRecognition();
 
 		return task;
 	}

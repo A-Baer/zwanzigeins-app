@@ -85,13 +85,14 @@ if (debugParam != null) {
 }
 
 let swUri = 'service-worker.js';
+let isCapacitorApp = window.Capacitor != null;
 
 let reloadButton = document.querySelector('#reloadForUpdate > button');
 reloadButton.onclick = () => {
 	location.reload();
 };
 
-if (window.navigator.serviceWorker) {
+if (!isCapacitorApp && window.navigator.serviceWorker) {
 
 	window.navigator.serviceWorker.getRegistration().then(registration => {
 
@@ -152,4 +153,3 @@ function checkAvailableVoices() {
 
 	}, 500);
 }
-

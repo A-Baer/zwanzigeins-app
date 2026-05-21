@@ -142,23 +142,25 @@ export default class GlobalSettings extends Options {
 
 			localStorage.clear();
 
-			window.caches.delete('v1')
-				.then(() => {
+			if (navigator.serviceWorker) {
 
-					return navigator.serviceWorker.getRegistrations();
-				})
-				.then(registrations => {
+				window.caches.delete('v1')
+					.then(() => {
 
-					for (let registration of registrations) {
-						registration.unregister();
-					}
-				})
-				.then(() => {
-					location.reload();
-				})
-				;
+						return navigator.serviceWorker.getRegistrations();
+					})
+					.then(registrations => {
 
-			if (!navigator.serviceWorker) {
+						for (let registration of registrations) {
+							registration.unregister();
+						}
+					})
+					.then(() => {
+						location.reload();
+					})
+					;
+			}
+			else {
 				location.reload();
 			}
 		}

@@ -1,4 +1,7 @@
 :root{
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --header-base-height: 3rem;
+    --header-height: calc(var(--header-base-height) + var(--safe-area-top));
     --header-bg-color: #282828;
     --header-font-color: white;
     --selected-bg-color: #1482cc;
@@ -139,7 +142,8 @@ header{
     width: 100%;
     background-color: var(--header-bg-color);
     color: var(--header-font-color);
-    height: 3rem;
+    height: var(--header-height);
+    padding-top: var(--safe-area-top);
     display: flex;
     align-items: center;    
 }
@@ -147,8 +151,8 @@ header{
 header > img{
 	position: absolute;
 	left: 18px;
-	top: 11px;
-	height: calc(3rem - 20px);
+	top: calc(11px + var(--safe-area-top));
+	height: calc(var(--header-base-height) - 20px);
 }
 
 .dialog {
@@ -544,4 +548,3 @@ html:not(.iphone) .iphone-only{
 .flex-1{
 	flex: 1;
 }
-

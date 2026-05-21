@@ -80,7 +80,7 @@ html.dark-theme{
 	text-align: center;
 	border-collapse: collapse;
 	/* iphone needs height: full-height - header-height */
-	height: calc(100% - 3rem);
+	height: calc(100% - var(--header-height));
 }
 
 .numberGame td{
