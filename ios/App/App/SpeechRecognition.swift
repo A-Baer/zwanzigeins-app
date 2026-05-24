@@ -21,6 +21,10 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var activeCall: CAPPluginCall?
+    private var finishAudioTimer: Timer?
+    private var noResultTimer: Timer?
+    private var partialResultTimer: Timer?
+    private var latestMatches: [String] = []
 
     @objc func available(_ call: CAPPluginCall) {
         let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
@@ -89,6 +93,10 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
 #else
         let language = call.getString("language") ?? "de-DE"
         let maxResults = min(max(call.getInt("maxResults") ?? 5, 1), 5)
+        let reportPartialResults = call.getBool("partialResults") ?? true
+        let timeout = max(call.getDouble("timeout") ?? 4.0, 1.0)
+        let partialResultDelay = max(call.getDouble("partialResultDelay") ?? 0.75, 0.2)
+        latestMatches = []
 
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
 
@@ -115,7 +123,8 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
 
         audioEngine = AVAudioEngine()
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        recognitionRequest?.shouldReportPartialResults = false
+        recognitionRequest?.shouldReportPartialResults = reportPartialResults
+        recognitionRequest?.taskHint = .dictation
 
         guard let audioEngine, let recognitionRequest else {
             call.reject("Speech recognition could not be initialized")
@@ -130,16 +139,27 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { result, error in
             if let result {
                 let matches = Array(result.transcriptions.prefix(maxResults).map(\.formattedString))
+                self.latestMatches = matches
 
-                if result.isFinal || !matches.isEmpty {
-                    self.stopRecognition()
-                    self.activeCall?.resolve(["matches": matches])
-                    self.activeCall = nil
+                if !matches.isEmpty && result.isFinal {
+                    self.resolveRecognition(matches)
+                    return
+                }
+
+                if !matches.isEmpty && reportPartialResults {
+                    self.partialResultTimer?.invalidate()
+                    self.partialResultTimer = Timer.scheduledTimer(withTimeInterval: partialResultDelay, repeats: false) { [weak self] _ in
+                        guard let self, self.activeCall != nil else {
+                            return
+                        }
+
+                        self.resolveRecognition(self.latestMatches)
+                    }
                 }
             }
 
             if let error, self.activeCall != nil {
-                self.stopRecognition()
+                self.cleanupRecognition()
                 self.activeCall?.reject(error.localizedDescription)
                 self.activeCall = nil
             }
@@ -152,9 +172,21 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
         do {
             audioEngine.prepare()
             try audioEngine.start()
+            finishAudioTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
+                self?.recognitionRequest?.endAudio()
+            }
+            noResultTimer = Timer.scheduledTimer(withTimeInterval: timeout + 2.0, repeats: false) { [weak self] _ in
+                guard let self, self.activeCall != nil else {
+                    return
+                }
+
+                self.cleanupRecognition()
+                self.activeCall?.resolve(["matches": self.latestMatches])
+                self.activeCall = nil
+            }
         }
         catch {
-            stopRecognition()
+            cleanupRecognition()
             activeCall = nil
             call.reject("Speech recognition could not be started: \(error.localizedDescription)")
         }
@@ -162,6 +194,22 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func stopRecognition() {
+        cleanupRecognition()
+    }
+
+    private func resolveRecognition(_ matches: [String]) {
+        cleanupRecognition()
+        activeCall?.resolve(["matches": matches])
+        activeCall = nil
+    }
+
+    private func cleanupRecognition() {
+        finishAudioTimer?.invalidate()
+        noResultTimer?.invalidate()
+        partialResultTimer?.invalidate()
+        finishAudioTimer = nil
+        noResultTimer = nil
+        partialResultTimer = nil
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()

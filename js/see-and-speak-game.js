@@ -3,6 +3,7 @@ import NumberGame from './number-game.js';
 import TwistedSpeechInputConverter from './twisted-speech-input-converter.js';
 import Options from './options.js';
 import Pages from './pages.js';
+import Letterizer from './letterizer.js';
 
 export default class SeeAndSpeakGame extends NumberGame {
 
@@ -27,6 +28,7 @@ export default class SeeAndSpeakGame extends NumberGame {
 		this.options = new Options('see-and-speak-menu', defaultOptions, true);
 
 		this.twistedSpeechModeConverter = new TwistedSpeechInputConverter();
+		this.letterizer = new Letterizer();
 
 		var startButton = this.menuElem.querySelector('.start');
 
@@ -179,11 +181,17 @@ export default class SeeAndSpeakGame extends NumberGame {
 				return;
 			}
 
+			if (this.debugModeEnabled) {
+				this.showRecognitionMessage('Berechtigungen ok. Bitte jetzt sprechen...');
+			}
+
 			let result = await nativeSpeechRecognition.start({
 				language: 'de-DE',
 				maxResults: 5,
-				partialResults: false,
-				popup: false
+				partialResults: true,
+				popup: false,
+				timeout: 2.5,
+				partialResultDelay: 0.75
 			});
 
 			if (startId !== this.nativeRecognitionStartId) {
@@ -257,7 +265,10 @@ export default class SeeAndSpeakGame extends NumberGame {
 			this.debugOutputElem.innerHTML = debugOutputHtml;
 		}
 
-		if (this.options.twistedSpeechMode == 'zehneins') {
+		if (this.recognizedTranscriptsMatchRightResult(transcripts)) {
+			result = this.rightResult;
+		}
+		else if (this.options.twistedSpeechMode == 'zehneins') {
 
 			let currentArity = this.options.arity;
 			let speechRecognitionEvent = {
@@ -268,7 +279,7 @@ export default class SeeAndSpeakGame extends NumberGame {
 			result = this.twistedSpeechModeConverter.convertTwistedSpeechRecognition(currentArity, speechRecognitionEvent);
 		}
 		else {
-			result = transcripts[0];
+			result = this.convertTranscriptToNumber(transcripts[0]);
 		}
 
 		if (result == this.rightResult) {
@@ -285,6 +296,59 @@ export default class SeeAndSpeakGame extends NumberGame {
 			this.recognitionRightResultGiven = false;
 			this.taskElem.classList.add("error");
 		}
+	}
+
+	recognizedTranscriptsMatchRightResult(transcripts) {
+
+		let expectedSpeechInput = this.getExpectedSpeechInput();
+		let normalizedExpectedSpeechInput = this.normalizeSpeechInput(expectedSpeechInput);
+
+		for (let transcript of transcripts) {
+
+			if (this.convertTranscriptToNumber(transcript) == this.rightResult) {
+				return true;
+			}
+
+			if (this.normalizeSpeechInput(transcript) == normalizedExpectedSpeechInput) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	getExpectedSpeechInput() {
+
+		if (this.options.twistedSpeechMode == 'traditionellVerdreht') {
+			return this.letterizer.letterizeTraditionellVerdrehtNumber(this.rightResult);
+		}
+
+		return this.letterizer.letterizeZehnEinsNumber(this.rightResult);
+	}
+
+	normalizeSpeechInput(speechInput) {
+
+		return speechInput
+			.toString()
+			.toLowerCase()
+			.replaceAll(' ', '')
+			.replaceAll('-', '')
+			.replaceAll('.', '')
+			.replaceAll(',', '');
+	}
+
+	convertTranscriptToNumber(transcript) {
+
+		let normalizedTranscript = transcript
+			.toString()
+			.trim()
+			.replaceAll(' ', '');
+
+		if (/^\d+$/.test(normalizedTranscript)) {
+			return parseInt(normalizedTranscript);
+		}
+
+		return null;
 	}
 
 	initSpeechRecognitionIfNeeded() {

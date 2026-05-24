@@ -13,6 +13,7 @@ export default class TwistedSpeechInputConverter {
 			
 			// iphone sometimes has number-words in it's transcript
 			transcript = transcript.toLowerCase();
+			transcript = this.expandZehnEinsCompounds(transcript);
 			
 			transcript = transcript
 				.replaceAll('.', ' ')
@@ -110,6 +111,39 @@ export default class TwistedSpeechInputConverter {
 		}
 		
 		return this.convertTwistedSpeechInput(rightTranscript);
+	}
+
+	expandZehnEinsCompounds(transcript) {
+
+		let tennerWords = [
+			'zwanzig',
+			'dreißig',
+			'vierzig',
+			'fünfzig',
+			'sechzig',
+			'siebzig',
+			'achtzig',
+			'neunzig'
+		];
+		let digitWords = [
+			'eins',
+			'zwei',
+			'drei',
+			'vier',
+			'fünf',
+			'sechs',
+			'sieben',
+			'acht',
+			'neun'
+		];
+
+		for (let tennerWord of tennerWords) {
+			for (let digitWord of digitWords) {
+				transcript = transcript.replaceAll(tennerWord + digitWord, tennerWord + ' ' + digitWord);
+			}
+		}
+
+		return transcript;
 	}
 
 	convertTwistedSpeechInput(speechInput) {

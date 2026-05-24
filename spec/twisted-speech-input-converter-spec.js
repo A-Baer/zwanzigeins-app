@@ -22,3 +22,36 @@ describe('twistedSpeechInputConverter', () => {
 		.toEqual(1001);
 	});	
 });
+
+describe('twistedSpeechInputConverter', () => {
+
+	it('converts spoken zehneins words with whitespace', () => {
+		let speechRecognitionEvent = {
+			results: [
+				[
+					{
+						transcript: 'zwanzig eins'
+					}
+				]
+			]
+		};
+
+		expect(twistedSpeechInputConverter.convertTwistedSpeechRecognition(2, speechRecognitionEvent))
+		.toEqual(21);
+	});
+
+	it('converts spoken zehneins words without whitespace', () => {
+		let speechRecognitionEvent = {
+			results: [
+				[
+					{
+						transcript: 'zwanzigeins'
+					}
+				]
+			]
+		};
+
+		expect(twistedSpeechInputConverter.convertTwistedSpeechRecognition(2, speechRecognitionEvent))
+		.toEqual(21);
+	});
+});
