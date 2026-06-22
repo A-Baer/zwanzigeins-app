@@ -86,3 +86,4 @@ typings/
 /web/
 .idea/
 ios/DerivedData*/
+ios/build/
