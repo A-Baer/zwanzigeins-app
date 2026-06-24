@@ -7,6 +7,7 @@ export default class Sound {
 
 		this.lastPlayed = null;
 		this.letterizer = new Letterizer();
+		this.currentUtterance = null;
 	}
 
 	playInteger(integer, finishedHandler) {
@@ -26,14 +27,59 @@ export default class Sound {
 	playWord(word, finishedHandler) {
 
 		this.lastPlayed = word;
-		var msg = new SpeechSynthesisUtterance(word);
 
 		let speechRateString = GlobalSettings.INSTANCE.speechRate;
 		let speechRate = parseFloat(speechRateString);
 
+		let nativeTextToSpeech = this.getNativeTextToSpeech();
+		if (nativeTextToSpeech) {
+			nativeTextToSpeech.speak({
+				text: word,
+				language: 'de-DE',
+				rate: speechRate
+			}).then(() => {
+				if (finishedHandler) {
+					finishedHandler();
+				}
+			}).catch(error => {
+				console.error('Native text-to-speech failed', error);
+				this.playWordWithWebSpeech(word, speechRate, finishedHandler);
+			});
+			return;
+		}
+
+		this.playWordWithWebSpeech(word, speechRate, finishedHandler);
+	}
+
+	getNativeTextToSpeech() {
+
+		let capacitor = window.Capacitor;
+		if (!capacitor) {
+			return null;
+		}
+
+		if (!capacitor.isPluginAvailable || !capacitor.isPluginAvailable('TextToSpeech')) {
+			return null;
+		}
+
+		if (!capacitor.nativePromise) {
+			return null;
+		}
+
+		return {
+			speak: options => capacitor.nativePromise('TextToSpeech', 'speak', options),
+			stop: () => capacitor.nativePromise('TextToSpeech', 'stop', {})
+		};
+	}
+
+	playWordWithWebSpeech(word, speechRate, finishedHandler) {
+
+		var msg = new SpeechSynthesisUtterance(word);
+
 		msg.rate = speechRate;
 		msg.onend = finishedHandler;
 		msg.lang = 'de-DE';
+		this.currentUtterance = msg;
 		window.speechSynthesis.speak(msg);
 	}
 
