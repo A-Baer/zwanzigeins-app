@@ -235,10 +235,15 @@ button.delete:before {
 	background-image: url(../img/ic_delete_24px.svg);
 }
 
+button.edit:before {
+	background-image: url(../img/ic_settings_24px.svg);
+}
+
 a.createLevel:before {
 	background-image: url(../img/plus-box.svg);
 }
 
+.splitButton > .edit,
 .splitButton > .delete {
 	width: 3rem;
 }

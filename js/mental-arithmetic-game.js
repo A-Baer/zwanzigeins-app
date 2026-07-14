@@ -27,6 +27,7 @@ export default class MentalArithmeticGame extends NumberTypingGame {
 				let levelOptions = this.getPredefinedLevelOptions(levelName);
 
 				levelOptions['numTasks'] = 10;
+				levelOptions['auditive'] = this.options['auditive'];
 
 				Utils.copyObjectProperties(levelOptions, this.options);
 

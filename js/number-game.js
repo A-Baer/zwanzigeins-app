@@ -204,10 +204,23 @@ export default class NumberGame {
 		let pageId = this.gameName + '-level-creation';
 
 		let pageElem = document.querySelector('#' + pageId);
+		let titleElem = pageElem.querySelector('h1');
 
 		let createLevelButton = pageElem.querySelector('.finishLevelCreation');
 
 		let options = new Options(pageId, defaultOptions, false);
+		this.customLevelCreationOptions = options;
+		this.customLevelCreationTitleElem = titleElem;
+		this.customLevelCreationButton = createLevelButton;
+		this.customLevelCreationDefaultOptions = defaultOptions;
+		this.editedCustomLevel = null;
+
+		let createLevelLink = this.menuElem.querySelector('.createLevel');
+		if (createLevelLink) {
+			createLevelLink.onclick = () => {
+				this.prepareCustomLevelCreation();
+			};
+		}
 
 		createLevelButton.onclick = evt => {
 
@@ -220,12 +233,32 @@ export default class NumberGame {
 			}
 			else {
 
-				this.customLevels.push(levelDefinitionData);
+				if (this.editedCustomLevel) {
+					Utils.copyObjectProperties(levelDefinitionData, this.editedCustomLevel);
+					this.editedCustomLevel = null;
+				}
+				else {
+					this.customLevels.push(levelDefinitionData);
+				}
 				this.saveCustomLevels();
 				this.refreshCustomLevelButtons();
 				history.back();
 			}
 		};
+	}
+
+	prepareCustomLevelCreation(customLevel) {
+
+		this.editedCustomLevel = customLevel || null;
+		this.customLevelCreationOptions.setValues(customLevel || {});
+
+		if (this.customLevelCreationTitleElem) {
+			this.customLevelCreationTitleElem.textContent = customLevel ? 'Level bearbeiten' : 'Level erstellen';
+		}
+
+		if (this.customLevelCreationButton) {
+			this.customLevelCreationButton.textContent = customLevel ? 'Level speichern' : 'Level erstellen';
+		}
 	}
 
 	loadCustomLevels() {
@@ -275,6 +308,7 @@ export default class NumberGame {
 
 			levelButtonContainer.innerHTML =
 				'<button>' + labelText + '</button>' +
+				'<button class="edit"></button>' +
 				'<button class="delete"></button>'
 				;
 
@@ -296,7 +330,19 @@ export default class NumberGame {
 				this.startGame();
 			};
 
-			let deleteButton = levelButtonContainer.lastElementChild;
+			let editButton = levelButtonContainer.querySelector('.edit');
+
+			editButton.customLevel = customLevel;
+
+			editButton.onclick = evt => {
+
+				evt.stopPropagation();
+
+				this.prepareCustomLevelCreation(evt.currentTarget.customLevel);
+				window.location.hash = this.gameName + '-level-creation';
+			};
+
+			let deleteButton = levelButtonContainer.querySelector('.delete');
 
 			deleteButton.customLevel = customLevel;
 

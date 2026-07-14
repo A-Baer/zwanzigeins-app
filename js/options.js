@@ -28,6 +28,7 @@ export default class Options {
 		this.pageElem = document.getElementById(pageId);
 		if (this.pageElem) {
 			this.bindInputElements(this.pageElem, defaultOptions);
+			this.syncInputElements();
 		}
 		else {
 			console.log('no page-element found for "' + pageId + "', assuming test-mode.");
@@ -101,7 +102,7 @@ export default class Options {
 
 						this[propertyKey] = newValue;
 
-						inputElem.parentElement.dataset.selectedValue = curVal;
+						inputElem.parentElement.dataset.selectedValue = newValue;
 						this.saveOptions();
 					}
 
@@ -135,6 +136,86 @@ export default class Options {
 					}
 			}
 		}
+	}
+
+	setValues(values) {
+
+		for (let propertyKey of this.payloadPropertyKeys) {
+			this[propertyKey] = this.defaultOptions[propertyKey];
+		}
+
+		for (let propertyKey in values) {
+			if (this.payloadPropertyKeys.includes(propertyKey)) {
+				this[propertyKey] = values[propertyKey];
+			}
+		}
+
+		this.syncInputElements();
+	}
+
+	syncInputElements() {
+
+		if (!this.pageElem) {
+			return;
+		}
+
+		let inputElems = this.pageElem.querySelectorAll('[name]');
+		let radioGroups = {};
+
+		for (let inputElem of inputElems) {
+			let name = inputElem.name;
+			let curVal = this[name];
+
+			switch (inputElem.type) {
+
+				case 'checkbox':
+					inputElem.checked = curVal;
+					this.updateCheckBoxDataAttribute(inputElem);
+					break;
+
+				case 'radio':
+					if (!radioGroups[name]) {
+						radioGroups[name] = [];
+					}
+					radioGroups[name].push(inputElem);
+					inputElem.checked = inputElem.value == curVal;
+					if (inputElem.checked) {
+						inputElem.parentElement.dataset.selectedValue = curVal;
+					}
+					break;
+
+				case 'number':
+					inputElem.value = parseFloat(curVal);
+					break;
+
+				default:
+					inputElem.value = curVal;
+			}
+		}
+
+		for (let name in radioGroups) {
+			let radioGroup = radioGroups[name];
+			let checkedRadio = radioGroup.find(radioElem => radioElem.checked);
+
+			if (!checkedRadio && radioGroup.length > 0) {
+				let fallbackValue = this.defaultOptions[name];
+				let fallbackRadio = radioGroup.find(radioElem => radioElem.value == fallbackValue) || radioGroup[0];
+				fallbackRadio.checked = true;
+				this[name] = this.parseInputValue(fallbackRadio, fallbackValue);
+				fallbackRadio.parentElement.dataset.selectedValue = this[name];
+				this.saveOptions();
+			}
+		}
+	}
+
+	parseInputValue(inputElem, value) {
+
+		let defaultOption = this.defaultOptions[inputElem.name];
+		if (typeof defaultOption == 'number') {
+			return parseFloat(value);
+		}
+
+		return value;
 	}
 
 	updateCheckBoxDataAttribute(checkBoxInput) {

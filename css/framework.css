@@ -291,12 +291,20 @@ a[href^="mailto:"] {
 	position: relative;
 }
 
+.splitButton > .edit,
 .splitButton > .delete {
 	width: 3rem;
 	height: 100%;
 	position: absolute;
-	right: 0;
 	top: 0;
+}
+
+.splitButton > .edit {
+	right: 3rem;
+}
+
+.splitButton > .delete {
+	right: 0;
 }
 
 .splitButton > button {
@@ -307,7 +315,7 @@ a[href^="mailto:"] {
 	width: fit-content;
 	margin-left: auto;
 	margin-right: auto;
-	padding-right: 3rem;
+	padding-right: 6rem;
 }
 
 .splitButton > *:last-child {
