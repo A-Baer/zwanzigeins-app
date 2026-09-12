@@ -130,6 +130,19 @@ in App Store Connect geprüft werden.
 - `ios/App/`: Capacitor-iOS-Projekt und native Plugins
 - `doc/`: zusätzliche Veröffentlichungsdokumentation
 
+## Sicherheit und Beiträge
+
+Das Repository ist öffentlich. Änderungen an `master` erfolgen über Pull
+Requests und müssen den automatischen Testlauf bestehen. Abhängigkeiten werden
+von Dependabot überwacht und aktualisiert.
+
+Sicherheitslücken bitte nicht in öffentlichen Issues melden. Die vertrauliche
+Meldung ist über GitHubs **Private vulnerability reporting** möglich. Weitere
+Hinweise stehen in [SECURITY.md](SECURITY.md).
+
+Apple-Signing-Zertifikate, Provisioning-Profile, App-Store-Connect-Schlüssel
+und andere Zugangsdaten gehören niemals in dieses Repository.
+
 ## Entwicklungshinweise
 
 Die Web-App ist bewusst frameworkarm und verwendet ES-Module. Änderungen an
