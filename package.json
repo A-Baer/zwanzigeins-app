@@ -6,6 +6,7 @@
   "main": "src/zwanzigeins-app.js",
   "scripts": {
     "test": "jasmine",
+    "marketing:statistics-example": "node marketing/generate-statistics-example.js",
     "cap:prepare": "rm -rf web && mkdir -p web && rsync -a --delete index.html zwanzigeins-app.html manual.html speechmode-measuring.html service-worker.js web-manifest.json css js img mp3 res web/",
     "cap:sync:ios": "npm run cap:prepare && npx cap sync ios",
     "cap:open:ios": "npx cap open ios"
